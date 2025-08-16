@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calculadora Completa de Razón de Cambio - Mejorada</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 20px;
+      max-width: 800px;
+      background: #f0f4ff;
+      color: #222;
+      user-select: none;
+    }
+    h1 {
+      color: #004aad;
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 3px rgba(0, 74, 173, 0.4);
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 600;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      font-size: 1.05em;
+      border-radius: 6px;
+      border: 2px solid #004aad;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      box-sizing: border-box;
+    }
+    input:focus, select:focus {
+      border-color: #1a73e8;
+      outline: none;
+      box-shadow: 0 0 8px #1a73e8aa;
+    }
+    button {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 18px;
+      box-shadow: 0 4px 9px rgba(26, 115, 232, 0.4);
+      transition: background-color 0.4s ease, transform 0.2s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+      transform: scale(1.05);
+      box-shadow: 0 6px 14px rgba(0, 86, 179, 0.6);
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    .result {
+      margin-top: 25px;
+      padding: 15px 18px;
+      background-color: #d9e6ff;
+      border-radius: 8px;
+      border: 2px solid #004aad;
+      color: #002a72;
+      font-weight: 600;
+      box-shadow: 2px 2px 8px rgba(0,74,173,0.25);
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.6s forwards;
+    }
+    #chartContainer {
+      margin-top: 30px;
+      border: 2px solid #004aad;
+      border-radius: 12px;
+      padding: 15px;
+      background: white;
+      box-shadow: 3px 3px 15px rgba(0,74,173,0.15);
+    }
+
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Legend color circles */
+    .chartjs-render-monitor + .chartjs-legend ul li span {
+      border-radius: 50%;
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <h1>Calculadora Completa de Razón de Cambio</h1>
+  <p style="text-align:center; color:#555;">Ingresa la función f(x) y elige el tipo de cálculo.</p>
+
+  <label for="functionInput">Función f(x):</label>
+  <input type="text" id="functionInput" placeholder="Ejemplo: 4*x^3 - 3*x^2 + 2*x + 1" value="4*x^3 - 3*x^2 + 2*x + 1" />
+
+  <label for="calcType">Tipo de cálculo:</label>
+  <select id="calcType" aria-label="Tipo de cálculo de razón de cambio">
+    <option value="promedio">Razón de cambio promedio</option>
+    <option value="instantanea">Razón de cambio instantánea</option>
+  </select>
+
+  <div id="promedioInputs" aria-label="Entradas para razón de cambio promedio">
+    <label for="x1Input">Valor x₁:</label>
+    <input type="number" id="x1Input" aria-required="true" value="1" />
+    <label for="x2Input">Valor x₂:</label>
+    <input type="number" id="x2Input" aria-required="true" value="3" />
+  </div>
+
+  <div id="instantaneaInputs" style="display:none;" aria-label="Entradas para razón de cambio instantánea">
+    <label for="pointsInput">Puntos x (separados por comas):</label>
+    <input type="text" id="pointsInput" placeholder="Ejemplo: 0, 0.5, 1, 1.5, 2" value="0, 0.5, 1, 1.5, 2" />
+  </div>
+
+  <button id="calculateBtn" aria-label="Calcular y Graficar">Calcular y Graficar</button>
+
+  <div class="result" id="result" style="display:none;" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="chartContainer">
+    <canvas id="graphChart" aria-label="Gráfica de la función y las líneas asociadas"></canvas>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+  <script>
+    const calcTypeSelect = document.getElementById('calcType');
+    const promedioInputs = document.getElementById('promedioInputs');
+    const instantaneaInputs = document.getElementById('instantaneaInputs');
+    const calculateBtn = document.getElementById('calculateBtn');
+    const resultDiv = document.getElementById('result');
+    const ctx = document.getElementById('graphChart').getContext('2d');
+    let chart = null;
+
+    calcTypeSelect.addEventListener('change', () => {
+      if (calcTypeSelect.value === 'promedio') {
+        promedioInputs.style.display = 'block';
+        instantaneaInputs.style.display = 'none';
+      } else {
+        promedioInputs.style.display = 'none';
+        instantaneaInputs.style.display = 'block';
+      }
+      resultDiv.style.display = 'none';
+      if(chart) {
+        chart.destroy();
+        chart = null;
+      }
+    });
+
+    function calcularRazonCambioPromedio(funcStr, x1, x2) {
+      const f = math.parse(funcStr);
+      const y1 = f.evaluate({ x: x1 });
+      const y2 = f.evaluate({ x: x2 });
+      const razon = (y2 - y1) / (x2 - x1);
+      return { razon, y1, y2 };
+    }
+
+    function calcularRazonCambioInstantanea(funcStr, puntos) {
+      const expr = math.parse(funcStr);
+      const derivada = math.derivative(expr, 'x').toString();
+      const df = math.parse(derivada);
+      const resultados = puntos.map(p => {
+        return { x: p, valor: df.evaluate({ x: p }) };
+      });
+      return { derivada, resultados };
+    }
+
+    function generarDatosGrafica(funcionStr, rangoX, numPuntos=200) {
+      const f = math.parse(funcionStr);
+      const xs = [];
+      const ys = [];
+      const paso = (rangoX[1] - rangoX) / (numPuntos - 1);
+      for(let i=0; i<numPuntos; i++) {
+        let xVal = rangoX + paso * i;
+        try {
+          xs.push(xVal);
+          ys.push(f.evaluate({ x: xVal }));
+        } catch {
+          ys.push(null);
+        }
+      }
+      return { xs, ys };
+    }
+
+    function graficarPromedio(funcStr, x1, x2, y1, y2) {
+      const margen = 1;
+      const rangoMinX = Math.min(x1, x2) - margen;
+      const rangoMaxX = Math.max(x1, x2) + margen;
+      const { xs, ys } = generarDatosGrafica(funcStr, [rangoMinX, rangoMaxX]);
+
+      const datasets = [
+        {
+          label: 'f(x)',
+          data: xs.map((x, i) => ({ x, y: ys[i] })),
+          borderColor: '#1e90ff',
+          backgroundColor: 'rgba(30,144,255,0.2)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 3,
+          parsing: { xAxisKey: 'x', yAxisKey:'y' }
+        }
+      ];
+
+      const pendiente = (y2 - y1) / (x2 - x1);
+      const secanteXs = [rangoMinX, rangoMaxX];
+      const secanteYs = secanteXs.map(x => y1 + pendiente * (x - x1));
+      datasets.push({
+        label: 'Secante (Razón promedio)',
+        data: secanteXs.map((x, i) => ({ x, y: secanteYs[i] })),
+        borderColor: '#ff4500',
+        borderDash: [15, 7],
+        fill: false,
+        tension: 0.2,
+        borderWidth: 2,
+        pointRadius: 0,
+        parsing: { xAxisKey: 'x', yAxisKey:'y' }
+      });
+      datasets.push({
+        label: 'Puntos calculados',
+        data: [{ x: x1, y: y1 }, { x: x2, y: y2 }],
+        backgroundColor: '#ff4500',
+        borderColor: '#ff4500',
+        type: 'scatter',
+        pointRadius: 7,
+        pointHoverRadius: 10,
+        parsing: { xAxisKey: 'x', yAxisKey:'y' }
+      });
+
+      if(chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+          responsive: true,
+          animation: { duration: 1200, easing: 'easeOutQuad' },
+          scales: {
+            x: { type: 'linear', position: 'bottom', title: { display: true, text: 'x' }, grid: { color: '#cdd7ee' } },
+            y: { title: { display: true, text: 'f(x)' }, grid: { color: '#cdd7ee' } }
+          },
+          plugins: {
+            legend: { labels: { color: '#004aad', font: { weight: 'bold', size: 14 } } }
+          },
+          interaction: {
+            mode: 'nearest',
+            axis: 'x',
+            intersect: false,
+          },
+          hover: {
+            mode: 'nearest',
+            animationDuration: 200
+          }
+        }
+      });
+    }
+
+    function graficarInstantanea(funcStr, derivadaStr, puntos) {
+      const margen = 1;
+      const rangoMinX = Math.min(...puntos) - margen;
+      const rangoMaxX = Math.max(...puntos) + margen;
+      const { xs, ys } = generarDatosGrafica(funcStr, [rangoMinX, rangoMaxX]);
+
+      const datasets = [{
+        label: 'f(x)',
+        data: xs.map((x, i) => ({ x, y: ys[i] })),
+        borderColor: '#1e90ff',
+        backgroundColor: 'rgba(30,144,255,0.2)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 3,
+        parsing: { xAxisKey: 'x', yAxisKey:'y' }
+      }];
+
+      puntos.forEach((p, i) => {
+        try {
+          const f = math.parse(funcStr);
+          const yEval = f.evaluate({ x: p });
+          const derivada = math.parse(derivadaStr);
+          const pendiente = derivada.evaluate({ x: p });
+          const tangenteXs = [rangoMinX, rangoMaxX];
+          const tangenteYs = tangenteXs.map(x => yEval + pendiente * (x-p));
+          // Different green shades for tangents
+          const colorHue = 120 + i*15;
+          datasets.push({
+            label: `Tangente en x=${p}`,
+            data: tangenteXs.map((x,i) => ({ x, y: tangenteYs[i] })),
+            borderColor: `hsl(${colorHue}, 70%, 40%)`,
+            borderDash: [12, 6],
+            fill: false,
+            tension: 0.2,
+            borderWidth: 2,
+            pointRadius: 0,
+            parsing: { xAxisKey: 'x', yAxisKey:'y' }
+          });
+          datasets.push({
+            label: `Punto x=${p}`,
+            data: [{ x: p, y: yEval }],
+            backgroundColor: `hsl(${colorHue}, 90%, 50%)`,
+            borderColor: `hsl(${colorHue}, 90%, 40%)`,
+            type: 'scatter',
+            pointRadius: 7,
+            pointHoverRadius: 11,
+            parsing: { xAxisKey: 'x', yAxisKey:'y' }
+          });
+        } catch {}
+      });
+
+      if(chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+          responsive: true,
+          animation: { duration: 1400, easing: 'easeOutQuart' },
+          scales: {
+            x: { type: 'linear', position: 'bottom', title: { display: true, text: 'x' }, grid: { color: '#cdd7ee' } },
+            y: { title: { display: true, text: 'f(x)' }, grid: { color: '#cdd7ee' } }
+          },
+          plugins: {
+            legend: { labels: { color: '#004aad', font: { weight: 'bold', size: 14 } } }
+          },
+          interaction: {
+            mode: 'nearest',
+            axis: 'x',
+            intersect: false,
+          },
+          hover: {
+            mode: 'nearest',
+            animationDuration: 250
+          }
+        }
+      });
+    }
+
+    calculateBtn.addEventListener('click', () => {
+      const funcStr = document.getElementById('functionInput').value.trim();
+      const tipo = calcTypeSelect.value;
+      resultDiv.style.display = 'block';
+      resultDiv.style.opacity = 0;
+      resultDiv.style.transform = 'translateY(20px)';
+
+      try {
+        if(tipo === 'promedio') {
+          const x1 = parseFloat(document.getElementById('x1Input').value);
+          const x2 = parseFloat(document.getElementById('x2Input').value);
+          if(x1 === x2) throw new Error('x₁ y x₂ deben ser diferentes.');
+
+          const { razon, y1, y2 } = calcularRazonCambioPromedio(funcStr, x1, x2);
+          resultDiv.innerHTML = `
+            <p><strong>Razón de cambio promedio:</strong> ${(razon).toFixed(5)}</p>
+            <p>Usando los puntos:</p>
+            <ul>
+              <li>f(${x1}) = ${y1.toFixed(5)}</li>
+              <li>f(${x2}) = ${y2.toFixed(5)}</li>
+            </ul>
+          `;
+          graficarPromedio(funcStr, x1, x2, y1, y2);
+        } else {
+          const pointsStr = document.getElementById('pointsInput').value.trim();
+          const puntos = pointsStr.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+          if(puntos.length === 0) throw new Error('Ingrese al menos un punto válido.');
+
+          const { derivada, resultados } = calcularRazonCambioInstantanea(funcStr, puntos);
+          let textoResultados = `<p>Derivada simbólica: <strong>f'(x) = ${derivada}</strong></p><ul>`;
+          resultados.forEach(r => {
+            textoResultados += `<li>f'(${r.x}) = ${r.valor.toFixed(5)} (${r.valor > 0 ? 'Creciente' : r.valor < 0 ? 'Decreciente' : 'Constante'})</li>`;
+          });
+          textoResultados += '</ul>';
+          resultDiv.innerHTML = textoResultados;
+
+          graficarInstantanea(funcStr, derivada, puntos);
+        }
+        // Animación de transición para resultados
+        setTimeout(() => {
+          resultDiv.style.opacity = 1;
+          resultDiv.style.transform = 'translateY(0)';
+        }, 50);
+      } catch (e) {
+        resultDiv.innerHTML = `<p style="color: #d93025; font-weight: bold;">Error: ${e.message}</p>`;
+        if(chart){
+          chart.destroy();
+          chart = null;
+        }
+        resultDiv.style.opacity = 1;
+        resultDiv.style.transform = 'translateY(0)';
+      }
+    });
+  </script>
+</body>
+</html>
